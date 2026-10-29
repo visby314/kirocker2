@@ -223,6 +223,11 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 .chip:disabled{opacity:.55}
 [hidden]{display:none!important}
 .kpis b{font-size:1.1rem}
+.pbar{position:relative;height:14px;background:var(--tint);border-radius:999px;overflow:visible}
+.pbar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.pbar b{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink)}
+.kpis b.ok{color:var(--ok)} .kpis b.warn{color:var(--warn)}
+#planCard .kpis,#statPlan .kpis{grid-template-columns:1fr 1fr}
 </style>
 </head>
 <body>
@@ -270,6 +275,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     </div>
 
     <div class="card plain" id="todayCard"></div>
+    <div class="card plain" id="planCard"></div>
   </section>
 
   <!-- 記録 -->
@@ -295,6 +301,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   <!-- 集計 -->
   <section class="view" id="view-stats" hidden>
     <div class="minis" role="tablist" aria-label="期間"><button type="button" class="mini" role="tab" data-range="7" aria-selected="true">7日</button><button type="button" class="mini" role="tab" data-range="30" aria-selected="false">30日</button></div>
+    <div class="card plain" id="statPlan"></div>
     <div class="card plain" id="statSum"></div>
     <div class="card plain" id="statChart"></div>
     <div class="card plain" id="statSubj"></div>
@@ -317,6 +324,11 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
         <input id="goalH" type="number" inputmode="decimal" min="0" max="24" step="0.5">
         <p class="note">日付の区切りは朝4時です。夜中の1時に勉強した分は、前の日に入ります。</p>
       </div>
+      <div class="row2">
+        <div class="field"><label class="flabel" for="planStart">数え始める日</label><input id="planStart" type="date"></div>
+        <div class="field"><label class="flabel" for="planEnd">締め切り日</label><input id="planEnd" type="date"></div>
+      </div>
+      <p class="note">数え始める日を空けておくと、最初に記録した日から数えます。締め切り日の前日までを目標の期間にします。</p>
     </div>
 
     <div class="card">
@@ -350,7 +362,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   // ---------- 状態 ----------
   const LS_DATA = 'kiroku-data-v1', LS_RUN = 'kiroku-run-v1', LS_GH = 'study-inbox-settings-v1', LS_UI = 'kiroku-ui-v1';
   const T0 = '1970-01-01T00:00:00.000Z';
-  let data = {v:1, subjects:JSON.parse(JSON.stringify(DEFAULT_SUBJ)), subjAt:T0, sessions:[], goalH:8, goalAt:T0};
+  let data = {v:1, subjects:JSON.parse(JSON.stringify(DEFAULT_SUBJ)), subjAt:T0, sessions:[], goalH:8, goalAt:T0, plan:{start:null, end:'2027-02-25'}, planAt:T0};
   let dirty = false;
   try { const v = JSON.parse(localStorage.getItem(LS_DATA) || 'null'); if (v && v.v === 1) { data = v.data; dirty = !!v.dirty; } } catch(e) {}
   let gh = {owner:'', repo:'', token:''};
@@ -393,6 +405,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     const out = {v:1, sessions:[...byId.values()].sort((x, y) => x.start < y.start ? -1 : x.start > y.start ? 1 : (x.id < y.id ? -1 : 1))};
     const ws = b.subjAt > a.subjAt ? b : a; out.subjects = ws.subjects; out.subjAt = ws.subjAt;
     const wg = b.goalAt > a.goalAt ? b : a; out.goalH = wg.goalH; out.goalAt = wg.goalAt;
+    const wp = (b.planAt || T0) > (a.planAt || T0) ? b : a; out.plan = wp.plan || {start:null, end:'2027-02-25'}; out.planAt = wp.planAt || T0;
     return out;
   }
   function setSync(t, kind){ const s = $('sync'); s.textContent = t; s.dataset.kind = kind || ''; }
@@ -541,6 +554,38 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); keepAwake(wantAwake()); renderToday(); } });
   setInterval(() => { if (run) tick(); }, 250);
 
+  // ---------- 締め切りまでの進捗 ----------
+  // 期間は開始日から締め切り日の前日まで。目標の合計 = 1日の目標 × 期間の日数
+  const keyMs = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
+  const daysBetween = (a, b) => Math.round((keyMs(b) - keyMs(a)) / 86400000);
+  function planInfo(){
+    if (!data.plan) data.plan = {start:null, end:'2027-02-25'};
+    const today = todayKey(), end = data.plan.end || '2027-02-25';
+    const first = live().map(s => dayKey(Date.parse(s.start))).sort()[0];
+    const start = data.plan.start || (first && first < today ? first : today);
+    const goal = (+data.goalH || 0) * 3600, total = daysBetween(start, end);
+    if (!goal || total <= 0) return null;
+    const inPlan = s => { const k = dayKey(Date.parse(s.start)); return k >= start && k < end; };
+    const done = live().filter(inPlan).reduce((t, s) => t + s.sec, 0);
+    const doneYday = live().filter(s => inPlan(s) && dayKey(Date.parse(s.start)) < today).reduce((t, s) => t + s.sec, 0);
+    const passed = Math.max(0, Math.min(total, daysBetween(start, today))); // 昨日までの日数
+    const left = Math.max(0, daysBetween(today, end)); // 今日を含む残りの日数
+    const target = goal * total, pace = goal * passed;
+    return {start, end, total, done, doneYday, passed, left, target, pace, need: left ? Math.max(0, target - done) / left : 0, auto: !data.plan.start ? (first && first < today ? 'first' : 'today') : ''};
+  }
+  const md = k => `${+k.slice(5, 7)}/${+k.slice(8)}`;
+  function planHTML(){
+    const p = planInfo();
+    if (!p) return `<div class="chead"><span>締め切りまでの進捗</span></div><p class="note">「設定」で1日の目標と締め切り日を入れると、ここに出ます。</p>`;
+    const pc = Math.min(100, p.done * 100 / p.target), pacePc = Math.min(100, p.pace * 100 / p.target), diff = p.doneYday - p.pace;
+    return `<div class="chead"><span>${md(p.end)}までの進捗</span><span class="clast">${(Math.floor(pc * 10) / 10).toFixed(1)}<small>%</small></span></div>
+      <div class="pbar"><i style="width:${pc}%"></i><b style="left:${pacePc}%" title="昨日までの目安"></b></div>
+      <div class="kpis"><div><b>${fmtH(p.done)}<small>時間</small></b><span>やった時間（目標 ${fmtH(p.target)}時間）</span></div>
+        <div><b class="${diff >= 0 ? 'ok' : 'warn'}">${diff >= 0 ? '+' : '−'}${fmtH(Math.abs(diff))}<small>時間</small></b><span>昨日までの目安 ${fmtH(p.pace)}時間との差</span></div>
+        <div><b>${p.left}<small>日</small></b><span>残り（今日を入れて）</span></div>
+        <div><b>${fmtH(p.need)}<small>時間</small></b><span>残りを1日に割ると</span></div></div>
+      <p class="note">${md(p.start)}${p.auto === 'first' ? '（最初の記録の日）' : p.auto === 'today' ? '（今日）' : ''}から${md(p.end)}の前日までの${p.total}日 × 1日${fmtH((+data.goalH || 0) * 3600)}時間で目標を出しています。棒の縦線は、昨日まで目標どおりに進んだときの位置です。</p>`;
+  }
   function renderToday(){
     const k = todayKey(); const ss = live().filter(s => dayKey(Date.parse(s.start)) === k);
     const runSec = run ? Math.floor(activeMs() / 1000) : 0;
@@ -612,6 +657,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 
   // ---------- 集計 ----------
   function renderStats(){
+    $('statPlan').innerHTML = planHTML();
     const n = +ui.range || 7; const today = todayKey();
     document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-selected', String(+b.dataset.range === n)));
     const days = Array.from({length: n}, (_, i) => shiftDay(today, i - n + 1));
@@ -682,6 +728,8 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
       $('ghMsg').textContent = 'つながりました。記録は records/study-log.json に入ります。'; sync();
     } catch(err) { $('ghMsg').textContent = 'GitHubにつながりませんでした。電波を確認してください。'; }
   });
+  $('planStart').addEventListener('change', () => { data.plan = Object.assign({}, data.plan, {start: $('planStart').value || null}); data.planAt = now(); changed(); renderAll(); });
+  $('planEnd').addEventListener('change', () => { if (!$('planEnd').value) return; data.plan = Object.assign({}, data.plan, {end: $('planEnd').value}); data.planAt = now(); changed(); renderAll(); });
   $('goalH').addEventListener('change', () => { data.goalH = Math.max(0, Math.min(24, +$('goalH').value || 0)); data.goalAt = now(); changed(); renderAll(); });
   function renderCfg(){
     $('subjCfg').innerHTML = data.subjects.map(s => `<div class="srow" data-sid="${s.id}"><input type="color" value="${s.color}" data-f="color" aria-label="${esc(s.name)}の色"><input type="text" value="${esc(s.name)}" data-f="name" aria-label="科目名"><button type="button" class="tool sm danger" data-delsub>消す</button></div>`).join('');
@@ -712,7 +760,8 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   }
   document.querySelector('.seg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) show(b.dataset.view); });
   function renderAll(){
-    renderRun(); fillSubjSelect(); $('goalH').value = data.goalH;
+    renderRun(); fillSubjSelect(); $('goalH').value = data.goalH; $('planCard').innerHTML = planHTML();
+    $('planStart').value = (data.plan && data.plan.start) || ''; $('planEnd').value = (data.plan && data.plan.end) || '2027-02-25';
     if (!$('view-log').hidden) renderLog(); if (!$('view-stats').hidden) renderStats();
   }
 
