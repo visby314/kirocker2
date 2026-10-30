@@ -32,7 +32,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);fo
 h1{margin:0;font-family:var(--f-display);font-weight:400;font-size:clamp(1.6rem,7vw,2.1rem);line-height:1.15}
 .sync{font-size:.75rem;font-weight:700;color:var(--muted)}
 .sync[data-kind="ok"]{color:var(--ok)} .sync[data-kind="warn"]{color:var(--warn)}
-.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--tint);border-radius:999px;padding:4px}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;background:var(--tint);border-radius:999px;padding:4px}
 .segbtn{font:inherit;font-size:.85rem;font-weight:700;border:0;background:transparent;color:var(--muted);padding:7px 2px;border-radius:999px;cursor:pointer;white-space:nowrap}
 .segbtn[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .08)}
 .banner{margin:0;background:var(--warn-soft);color:var(--warn);font-size:.85rem;font-weight:700;padding:10px 14px;border-radius:10px}
@@ -228,6 +228,26 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 .pbar b{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink)}
 .kpis b.ok{color:var(--ok)} .kpis b.warn{color:var(--warn)}
 #planCard .kpis,#statPlan .kpis{grid-template-columns:1fr 1fr}
+
+/* ノルマ */
+#bookForm{display:flex;flex-direction:column;gap:12px}
+#bookSum:empty{display:none}
+.book{background:var(--paper);border:1px solid var(--rule-soft);border-left:5px solid var(--c);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.book .dot,.blist .dot{background:var(--c)}
+.book .ascore{font-size:1.4rem}
+.bqrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
+.bq{font-size:.88rem;font-weight:700;border-radius:999px;padding:1px 10px}
+.bq.ok{color:var(--ok);background:var(--ok-soft)} .bq.warn{color:var(--warn);background:var(--warn-soft)} .bq.bad{color:var(--bad);background:var(--bad-soft)}
+.bqs{font-size:.75rem;color:var(--muted)}
+.warnt{color:var(--warn);font-weight:700}
+.okt{color:var(--ok);font-weight:700}
+.badd{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:1px dashed var(--rule-soft);padding-top:6px}
+.badd input{width:5em;padding:4px 8px;font-size:16px}
+.blist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.blist li{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 8px;font-size:.85rem}
+.blist .pn{font-weight:700}
+.segbtn{font-size:.8rem}
+.book .atop{align-items:flex-start}.book .ascore{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -239,6 +259,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 
   <nav class="seg" role="tablist" aria-label="画面">
     <button type="button" class="segbtn" role="tab" data-view="run" aria-selected="true">計る</button>
+    <button type="button" class="segbtn" role="tab" data-view="books" aria-selected="false">ノルマ</button>
     <button type="button" class="segbtn" role="tab" data-view="log" aria-selected="false">記録</button>
     <button type="button" class="segbtn" role="tab" data-view="stats" aria-selected="false">集計</button>
     <button type="button" class="segbtn" role="tab" data-view="settings" aria-selected="false">設定</button>
@@ -275,7 +296,31 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     </div>
 
     <div class="card plain" id="todayCard"></div>
+    <div class="card plain" id="bookToday" hidden></div>
     <div class="card plain" id="planCard"></div>
+  </section>
+
+  <!-- ノルマ -->
+  <section class="view" id="view-books" hidden>
+    <details class="card" id="bookBox">
+      <summary class="sumtitle" id="bookTitle">教材を足す</summary>
+      <form id="bookForm" novalidate>
+        <div class="field"><label class="flabel" for="bName">教材の名前</label><input id="bName" type="text" autocomplete="off" placeholder="例：ハイレベル数学の完全攻略"></div>
+        <div class="row2">
+          <div class="field"><label class="flabel" for="bSubj">科目</label><select id="bSubj"></select></div>
+          <div class="field"><label class="flabel" for="bUnit">数える単位</label><select id="bUnit"></select></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label class="flabel" for="bTotal">全部の量</label><input id="bTotal" type="number" inputmode="numeric" min="1" placeholder="例：120"></div>
+          <div class="field"><label class="flabel" for="bDone">もう済んだ量</label><input id="bDone" type="number" inputmode="numeric" min="0" placeholder="0"></div>
+          <div class="field"><label class="flabel" for="bDeadline">締め切り</label><input id="bDeadline" type="date"></div>
+        </div>
+        <div class="tools"><button type="submit" class="primary" id="bSave">足す</button><button type="button" class="tool" id="bCancel" hidden>直すのをやめる</button><button type="button" class="tool danger" id="bDel" hidden>この教材を消す</button></div>
+        <p class="msg" id="bMsg" role="status"></p>
+      </form>
+    </details>
+    <div class="card plain" id="bookSum"></div>
+    <div id="bookList"></div>
   </section>
 
   <!-- 記録 -->
@@ -362,7 +407,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   // ---------- 状態 ----------
   const LS_DATA = 'kiroku-data-v1', LS_RUN = 'kiroku-run-v1', LS_GH = 'study-inbox-settings-v1', LS_UI = 'kiroku-ui-v1';
   const T0 = '1970-01-01T00:00:00.000Z';
-  let data = {v:1, subjects:JSON.parse(JSON.stringify(DEFAULT_SUBJ)), subjAt:T0, sessions:[], goalH:8, goalAt:T0, plan:{start:null, end:'2027-02-25'}, planAt:T0};
+  let data = {v:1, subjects:JSON.parse(JSON.stringify(DEFAULT_SUBJ)), subjAt:T0, sessions:[], goalH:8, goalAt:T0, plan:{start:null, end:'2027-02-25'}, planAt:T0, books:[]};
   let dirty = false;
   try { const v = JSON.parse(localStorage.getItem(LS_DATA) || 'null'); if (v && v.v === 1) { data = v.data; dirty = !!v.dirty; } } catch(e) {}
   let gh = {owner:'', repo:'', token:''};
@@ -406,6 +451,8 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     const ws = b.subjAt > a.subjAt ? b : a; out.subjects = ws.subjects; out.subjAt = ws.subjAt;
     const wg = b.goalAt > a.goalAt ? b : a; out.goalH = wg.goalH; out.goalAt = wg.goalAt;
     const wp = (b.planAt || T0) > (a.planAt || T0) ? b : a; out.plan = wp.plan || {start:null, end:'2027-02-25'}; out.planAt = wp.planAt || T0;
+    const bk = new Map(); for (const x of [...(a.books || []), ...(b.books || [])]) { const y = bk.get(x.id); if (!y || x.updatedAt > y.updatedAt) bk.set(x.id, x); }
+    out.books = [...bk.values()].sort((x, y) => x.id < y.id ? -1 : 1);
     return out;
   }
   function setSync(t, kind){ const s = $('sync'); s.textContent = t; s.dataset.kind = kind || ''; }
@@ -574,6 +621,109 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     return {start, end, total, done, doneYday, passed, left, target, pace, need: left ? Math.max(0, target - done) / left : 0, auto: !data.plan.start ? (first && first < today ? 'first' : 'today') : ''};
   }
   const md = k => `${+k.slice(5, 7)}/${+k.slice(8)}`;
+  // ---------- 教材ノルマ ----------
+  // book = {id, name, subjectId, unit, total, base(登録時に済んでいた量), deadline, log:[{d, n}], updatedAt, deleted?}
+  const UNITS = ['問', 'ページ', '回', '講', '章', '題'];
+  const books = () => (data.books || []).filter(b => !b.deleted);
+  function bookInfo(b){
+    const today = todayKey();
+    const done = (+b.base || 0) + b.log.reduce((t, x) => t + x.n, 0);
+    const doneToday = b.log.filter(x => x.d === today).reduce((t, x) => t + x.n, 0);
+    const rest = Math.max(0, b.total - done), restBefore = Math.max(0, b.total - (done - doneToday));
+    const daysLeft = daysBetween(today, b.deadline) + 1; // 締め切りの日も入れる
+    const quota = daysLeft > 0 ? Math.ceil(restBefore / daysLeft) : restBefore;
+    const todayLeft = Math.max(0, quota - doneToday);
+    const week = b.log.filter(x => daysBetween(x.d, today) < 7).reduce((t, x) => t + x.n, 0);
+    const span = Math.max(1, Math.min(7, b.created ? daysBetween(b.created, today) + 1 : 7)); // 足して7日未満なら、その日数で割る
+    const pace = week / span;
+    const eta = rest === 0 ? null : pace > 0 ? shiftDay(today, Math.ceil(rest / pace) - 1) : null;
+    return {done, doneToday, rest, daysLeft, quota, todayLeft, week, pace, eta, span, finished: rest === 0, late: rest > 0 && daysLeft <= 0, slow: rest > 0 && (!eta || eta > b.deadline)};
+  }
+  function bookCard(b, compact){
+    const s = subj(b.subjectId), c = s ? s.color : '#6b7280', x = bookInfo(b), u = esc(b.unit);
+    const pc = Math.min(100, x.done * 100 / (b.total || 1));
+    let q;
+    if (x.finished) q = '<span class="bq ok">全部終わり</span>';
+    else if (x.late) q = `<span class="bq bad">締め切りを過ぎています（残り ${x.rest}${u}）</span>`;
+    else if (!x.todayLeft) q = `<span class="bq ok">今日の分は終わり（今日 ${x.doneToday}${u}）</span>`;
+    else q = `<span class="bq warn">今日あと ${x.todayLeft}${u}</span><span class="bqs">（今日のノルマ ${x.quota}${u}・やった ${x.doneToday}${u}）</span>`;
+    if (compact) return `<li style="--c:${c}"><span class="pn"><i class="dot"></i>${esc(b.name)}</span>${q}</li>`;
+    const eta = x.finished ? '' : x.pace > 0 ? `${x.span < 7 ? `足してからの${x.span}日` : '直近7日'}で1日 ${fmtN(x.pace)}${u}。このままだと ${md(x.eta)} に終わる${x.slow ? '（締め切りに間に合わない）' : ''}` : (x.span < 7 ? '足してからまだ進んでいません' : '直近7日は進んでいません');
+    return `<li class="book" style="--c:${c}" data-bid="${b.id}">
+      <div class="atop"><span class="asub"><i class="dot"></i>${esc(b.name)}<em>${esc(s ? s.name : '')}</em></span><span class="ascore">${x.done}<small>/ ${b.total}${u}</small></span></div>
+      <div class="gbar"><i style="width:${pc}%;background:var(--c)"></i></div>
+      <div class="ameta">${Math.floor(pc)}%・締め切り ${md(b.deadline)}${x.daysLeft > 0 ? `（今日を入れてあと${x.daysLeft}日）` : ''}</div>
+      <div class="bqrow">${q}</div>
+      <div class="ameta${x.slow ? ' warnt' : ''}">${eta}</div>
+      <div class="badd"><button type="button" class="tool sm" data-add="-1">−1</button><button type="button" class="tool sm" data-add="1">＋1</button><input type="number" inputmode="numeric" min="1" placeholder="数" aria-label="${esc(b.name)}に足す数"><button type="button" class="tool sm" data-addn>足す</button><button type="button" class="tool sm" data-bedit>直す</button></div></li>`;
+  }
+  const fmtN = n => (Math.round(n * 10) / 10).toString();
+  function renderBooks(){
+    const bs = books();
+    const order = b => { const x = bookInfo(b); return x.finished ? 3 : x.late ? 0 : x.todayLeft ? 1 : 2; };
+    bs.sort((a, b) => order(a) - order(b) || (a.deadline < b.deadline ? -1 : 1));
+    const left = bs.filter(b => { const x = bookInfo(b); return !x.finished && (x.late || x.todayLeft); }).length;
+    $('bookSum').innerHTML = bs.length ? `<div class="chead"><span>今日のノルマ</span><span class="clast">${left ? `あと ${left}<small>冊</small>` : '<span class="okt">全部終わり</span>'}</span></div><p class="note">締め切りの日まで、残りの量を毎日同じだけ進めるとしたときの、今日の分です。朝4時に切り替わります。</p>` : '';
+    $('bookList').innerHTML = bs.length ? `<ol class="atts">${bs.map(b => bookCard(b)).join('')}</ol>` : '<p class="empty">教材がまだありません。上の「教材を足す」から入れてください。</p>';
+  }
+  function todayBooksHTML(){
+    const bs = books().filter(b => { const x = bookInfo(b); return !x.finished && (x.late || x.todayLeft); });
+    if (!books().length) return '';
+    return `<div class="chead"><span>今日のノルマ</span></div>` + (bs.length ? `<ul class="blist">${bs.map(b => bookCard(b, true)).join('')}</ul>` : '<p class="note okt">今日の分は全部終わっています。</p>');
+  }
+  function addProgress(id, n){
+    const b = (data.books || []).find(x => x.id === id); if (!b || !n) return;
+    const k = todayKey(); const e = b.log.find(x => x.d === k);
+    if (e) e.n += n; else b.log.push({d: k, n});
+    if (e && e.n === 0) b.log = b.log.filter(x => x !== e);
+    b.updatedAt = now(); changed(); renderBooks(); renderToday2();
+  }
+  function renderToday2(){ const el = $('bookToday'); if (el) { const h = todayBooksHTML(); el.innerHTML = h; el.hidden = !h; } }
+  $('bookList').addEventListener('click', e => {
+    const li = e.target.closest('[data-bid]'); if (!li) return; const id = li.dataset.bid;
+    const a = e.target.closest('[data-add]'); if (a) { addProgress(id, +a.dataset.add); return; }
+    if (e.target.closest('[data-addn]')) { const inp = li.querySelector('input'); const n = Math.round(+inp.value); if (n) addProgress(id, n); return; }
+    if (e.target.closest('[data-bedit]')) startBookEdit(id);
+  });
+  let bookEditing = null;
+  function fillBookForm(){
+    $('bSubj').innerHTML = data.subjects.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    $('bUnit').innerHTML = UNITS.map(u => `<option>${u}</option>`).join('');
+  }
+  function resetBookForm(){
+    bookEditing = null; fillBookForm(); $('bName').value = ''; $('bTotal').value = ''; $('bDone').value = ''; $('bDeadline').value = '';
+    $('bSubj').value = ui.subj; $('bUnit').value = '問'; $('bSave').textContent = '足す'; $('bCancel').hidden = true; $('bDel').hidden = true; $('bookTitle').textContent = '教材を足す';
+  }
+  function startBookEdit(id){
+    const b = (data.books || []).find(x => x.id === id); if (!b) return; fillBookForm();
+    bookEditing = id; $('bookBox').open = true; $('bookTitle').textContent = '教材を直す';
+    $('bName').value = b.name; $('bSubj').value = b.subjectId; if (!UNITS.includes(b.unit)) $('bUnit').insertAdjacentHTML('beforeend', `<option>${esc(b.unit)}</option>`); $('bUnit').value = b.unit;
+    $('bTotal').value = b.total; $('bDone').value = bookInfo(b).done; $('bDeadline').value = b.deadline;
+    $('bSave').textContent = 'この教材を直す'; $('bCancel').hidden = false; $('bDel').hidden = false; $('bDel').textContent = 'この教材を消す'; $('bDel').dataset.armed = '';
+    $('bMsg').textContent = ''; window.scrollTo(0, 0);
+  }
+  $('bookForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = $('bName').value.trim(), total = Math.round(+$('bTotal').value), doneNow = Math.round(+$('bDone').value || 0), dl = $('bDeadline').value;
+    if (!name) { $('bMsg').textContent = '教材の名前を入れてください。'; return; }
+    if (!(total >= 1)) { $('bMsg').textContent = '全部の量を1以上で入れてください。'; return; }
+    if (doneNow < 0 || doneNow > total) { $('bMsg').textContent = '済んだ量は0から全部の量までで入れてください。'; return; }
+    if (!dl) { $('bMsg').textContent = '締め切りの日を入れてください。'; return; }
+    let b = bookEditing ? data.books.find(x => x.id === bookEditing) : null;
+    if (!data.books) data.books = [];
+    if (!b) { b = {id: 'b' + uid(), log: [], created: todayKey()}; data.books.push(b); }
+    const logged = b.log.reduce((t, x) => t + x.n, 0);
+    Object.assign(b, {name, subjectId: $('bSubj').value, unit: $('bUnit').value, total, base: doneNow - logged, deadline: dl, updatedAt: now()});
+    $('bMsg').textContent = `${name}を${bookEditing ? '直しました' : '足しました'}。`;
+    resetBookForm(); changed(); renderBooks(); renderToday2();
+  });
+  $('bCancel').addEventListener('click', () => { resetBookForm(); $('bMsg').textContent = ''; });
+  $('bDel').addEventListener('click', () => {
+    if ($('bDel').dataset.armed !== '1') { $('bDel').dataset.armed = '1'; $('bDel').textContent = 'もう一度押すと消します'; return; }
+    const b = data.books.find(x => x.id === bookEditing); if (b) { b.deleted = true; b.updatedAt = now(); }
+    $('bMsg').textContent = '消しました。'; resetBookForm(); changed(); renderBooks(); renderToday2();
+  });
+
   function planHTML(){
     const p = planInfo();
     if (!p) return `<div class="chead"><span>締め切りまでの進捗</span></div><p class="note">「設定」で1日の目標と締め切り日を入れると、ここに出ます。</p>`;
@@ -755,17 +905,17 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   function show(v){
     document.querySelectorAll('.segbtn').forEach(x => x.setAttribute('aria-selected', String(x.dataset.view === v)));
     document.querySelectorAll('.view').forEach(x => x.hidden = x.id !== 'view-' + v);
-    if (v === 'log') renderLog(); if (v === 'stats') renderStats(); if (v === 'settings') renderCfg(); if (v === 'run') renderRun();
+    if (v === 'books') renderBooks(); if (v === 'log') renderLog(); if (v === 'stats') renderStats(); if (v === 'settings') renderCfg(); if (v === 'run') renderRun();
     window.scrollTo(0, 0);
   }
   document.querySelector('.seg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) show(b.dataset.view); });
   function renderAll(){
-    renderRun(); fillSubjSelect(); $('goalH').value = data.goalH; $('planCard').innerHTML = planHTML();
+    renderRun(); fillSubjSelect(); $('goalH').value = data.goalH; $('planCard').innerHTML = planHTML(); renderToday2(); if (!$('view-books').hidden) renderBooks();
     $('planStart').value = (data.plan && data.plan.start) || ''; $('planEnd').value = (data.plan && data.plan.end) || '2027-02-25';
     if (!$('view-log').hidden) renderLog(); if (!$('view-stats').hidden) renderStats();
   }
 
-  resetManual(); renderAll();
+  resetManual(); resetBookForm(); renderAll();
   if (run && run.mode === 'timer' && activeMs() >= run.target) finishRun(true); // 閉じている間にタイマーが終わっていた
   else if (run) keepAwake(wantAwake());
   $('setupBanner').hidden = ghReady();
