@@ -248,6 +248,21 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 .blist .pn{font-weight:700}
 .segbtn{font-size:.8rem}
 .book .atop{align-items:flex-start}.book .ascore{white-space:nowrap}
+/* ごほうび画像 */
+.hero{margin:0;position:relative;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--tint)}
+.hero[hidden]{display:none}
+.hero img{display:block;width:100%;height:min(30vh,260px);object-fit:cover;object-position:center 25%}
+.hero figcaption{position:absolute;left:0;right:0;bottom:0;padding:20px 14px 10px;color:#fff;font-weight:700;font-size:1rem;background:linear-gradient(transparent,rgb(0 0 0 / .55))}
+.hero figcaption[hidden]{display:none}
+.reward{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.reward[hidden]{display:none}
+.reward img{max-width:100%;max-height:60vh;border-radius:12px;object-fit:contain}
+.rwtext{display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;text-align:center}
+.rwtext b{font-weight:800;font-size:1.5rem}
+.rwtext span{font-weight:700;opacity:.85}
+.rwtext p{margin:6px 0 0;font-weight:700;font-size:1.05rem}
+.rwtext p[hidden]{display:none}
+.reward .tool{background:#fff}
 </style>
 </head>
 <body>
@@ -269,6 +284,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 
   <!-- 計る -->
   <section class="view" id="view-run">
+    <figure class="hero" id="hero" hidden><img id="heroImg" alt="ごほうび画像"><figcaption id="heroCap"></figcaption></figure>
     <div class="card">
       <div class="field"><span class="flabel">科目</span><div class="chips" id="subjChips" role="radiogroup" aria-label="科目"></div></div>
       <div class="field">
@@ -382,7 +398,25 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
       <button type="button" class="tool" id="addSubj">科目を足す</button>
       <p class="note">名前を変えても、前の記録はその科目のまま残ります。消した科目の記録も残ります。</p>
     </div>
+
+    <div class="card">
+      <span class="flabel">ごほうび画像</span>
+      <p class="note">好きな写真をこの端末から選ぶと、計る画面の上と、勉強を記録したときに出ます。写真はこの端末の中だけに保存して、GitHubには送りません。</p>
+      <label class="pick" for="imgPick">写真を選ぶ</label><input id="imgPick" type="file" accept="image/*" multiple hidden>
+      <div class="thumbs" id="imgList"></div>
+      <label class="check"><input type="checkbox" id="imgHero"> 計る画面の上に出す</label>
+      <label class="check"><input type="checkbox" id="imgReward"> 25分以上の勉強を記録したときに大きく出す</label>
+      <div class="field"><label class="flabel" for="imgWords">一緒に出す言葉（1行に1つ、自分で書く）</label><textarea id="imgWords" rows="3" placeholder="例：2/25、本郷で会おう"></textarea></div>
+      <p class="msg" id="imgMsg" role="status"></p>
+    </div>
   </section>
+</div>
+
+<!-- 記録したときのごほうび -->
+<div class="reward" id="reward" hidden role="dialog" aria-label="記録しました">
+  <img id="rwImg" alt="ごほうび画像">
+  <div class="rwtext"><b id="rwTitle"></b><span id="rwSub"></span><p id="rwWord"></p></div>
+  <button type="button" class="tool" id="rwClose">閉じる</button>
 </div>
 
 <script>
@@ -575,7 +609,9 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     else {
       data.sessions.push({id: uid(), subjectId: run.subjectId, subjectName: s ? s.name : '', start: new Date(run.firstStart).toISOString(), end: new Date(endMs).toISOString(), sec, kind: run.mode, memo, updatedAt: now()});
       $('runMsg').textContent = `${s ? s.name : ''} ${dur(sec)}を記録しました。${byTimer ? 'タイマーが終わりました。' : ''}`;
+      const goal = (+data.goalH || 0) * 3600, today = secOfDay(todayKey()); // いま記録した分も入っている
       changed();
+      if (sec >= 1500) showReward(`${s ? s.name : ''} ${dur(sec)}`, today, goal, goal && today >= goal && today - sec < goal);
     }
     run = null; saveRun(); $('runMemo').value = ''; keepAwake(false);
     if (byTimer) beep();
@@ -915,7 +951,61 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
     if (!$('view-log').hidden) renderLog(); if (!$('view-stats').hidden) renderStats();
   }
 
-  resetManual(); resetBookForm(); renderAll();
+  // ---------- ごほうび画像（この端末だけ） ----------
+  let imgdb = null;
+  function imgDB(){ if (!imgdb) imgdb = new Promise((res, rej) => { const r = indexedDB.open('kiroku-images', 1); r.onupgradeneeded = () => r.result.createObjectStore('img', {keyPath:'id'}); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); return imgdb; }
+  async function imgDo(mode, fn){ const d = await imgDB(); return new Promise((res, rej) => { const tx = d.transaction('img', mode); const q = fn(tx.objectStore('img')); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); }); }
+  let imgs = []; // [{id, url}]
+  async function loadImgs(){
+    try { const all = await imgDo('readonly', s => s.getAll()); imgs.forEach(x => URL.revokeObjectURL(x.url)); imgs = (all || []).sort((a, b) => a.id < b.id ? -1 : 1).map(x => ({id: x.id, url: URL.createObjectURL(x.blob)})); } catch(e) { imgs = []; }
+    renderImgs(); renderHero();
+  }
+  async function shrinkImg(file){
+    const url = URL.createObjectURL(file);
+    try {
+      const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const sc = Math.min(1, 1400 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+      c.width = Math.round(im.naturalWidth * sc); c.height = Math.round(im.naturalHeight * sc); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const imgWords = () => (ui.imgWords || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const pick = (arr, seed) => arr.length ? arr[Math.abs(seed) % arr.length] : null;
+  const daySeed = () => todayKey().split('-').reduce((a, x) => a * 31 + +x, 7);
+  let heroShift = 0;
+  function renderHero(){
+    const on = ui.imgHero !== false && imgs.length;
+    $('hero').hidden = !on; if (!on) return;
+    const im = pick(imgs, daySeed() + heroShift); $('heroImg').src = im.url;
+    const w = pick(imgWords(), daySeed() + heroShift); $('heroCap').textContent = w || ''; $('heroCap').hidden = !w;
+  }
+  $('hero').addEventListener('click', () => { heroShift++; renderHero(); });
+  function renderImgs(){
+    $('imgList').innerHTML = imgs.map(x => `<span class="th"><img src="${x.url}" alt=""><button type="button" class="rm" data-img="${x.id}" aria-label="この写真を外す">×</button></span>`).join('');
+    $('imgHero').checked = ui.imgHero !== false; $('imgReward').checked = ui.imgReward !== false; if (document.activeElement !== $('imgWords')) $('imgWords').value = ui.imgWords || '';
+  }
+  $('imgPick').addEventListener('change', async e => {
+    const files = [...e.target.files]; e.target.value = ''; $('imgMsg').textContent = '読み込み中…'; let n = 0;
+    for (const f of files) { try { const b = await shrinkImg(f); await imgDo('readwrite', s => s.put({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), blob: b})); n++; } catch(err) {} }
+    $('imgMsg').textContent = n ? `${n}枚を足しました。` : '読み込めませんでした。'; loadImgs();
+  });
+  $('imgList').addEventListener('click', async e => { const b = e.target.closest('[data-img]'); if (!b) return; await imgDo('readwrite', s => s.delete(b.dataset.img)); loadImgs(); });
+  $('imgHero').addEventListener('change', () => { ui.imgHero = $('imgHero').checked; saveUI(); renderHero(); });
+  $('imgReward').addEventListener('change', () => { ui.imgReward = $('imgReward').checked; saveUI(); });
+  $('imgWords').addEventListener('input', () => { ui.imgWords = $('imgWords').value; saveUI(); renderHero(); });
+  function showReward(what, today, goal, reached){
+    if (ui.imgReward === false || !imgs.length) return;
+    const seed = Date.now() >> 10;
+    $('rwImg').src = pick(imgs, seed).url;
+    $('rwTitle').textContent = reached ? '今日の目標に届いた' : `${what} おつかれ`;
+    $('rwSub').textContent = `今日 ${dur(today)}${goal ? ` / 目標 ${dur(goal)}` : ''}`;
+    const w = pick(imgWords(), seed); $('rwWord').textContent = w || ''; $('rwWord').hidden = !w;
+    $('reward').hidden = false;
+  }
+  $('rwClose').addEventListener('click', () => { $('reward').hidden = true; });
+  $('reward').addEventListener('click', e => { if (e.target === $('reward')) $('reward').hidden = true; });
+
+  resetManual(); resetBookForm(); renderAll(); loadImgs();
   if (run && run.mode === 'timer' && activeMs() >= run.target) finishRun(true); // 閉じている間にタイマーが終わっていた
   else if (run) keepAwake(wantAwake());
   $('setupBanner').hidden = ghReady();
