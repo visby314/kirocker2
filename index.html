@@ -263,6 +263,15 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
 .rwtext p{margin:6px 0 0;font-weight:700;font-size:1.05rem}
 .rwtext p[hidden]{display:none}
 .reward .tool{background:#fff}
+/* PC：計る画面は、左にごほうび画像を縦に大きく、右に計る操作を並べる */
+@media (min-width:1000px){
+  body.runview:has(#hero:not([hidden])) .wrap{max-width:1240px}
+  #view-run:has(#hero:not([hidden])){display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;align-items:start}
+  #view-run:has(#hero:not([hidden])) > *{grid-column:2}
+  #view-run:has(#hero:not([hidden])) > #hero{grid-column:1;grid-row:1 / span 20;position:sticky;top:16px}
+  #view-run #hero img{height:calc(100vh - 150px);min-height:420px;object-position:center 15%}
+  #view-run #hero figcaption{font-size:1.3rem;padding:40px 20px 16px}
+}
 </style>
 </head>
 <body>
@@ -942,6 +951,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   function show(v){
     document.querySelectorAll('.segbtn').forEach(x => x.setAttribute('aria-selected', String(x.dataset.view === v)));
     document.querySelectorAll('.view').forEach(x => x.hidden = x.id !== 'view-' + v);
+    document.body.classList.toggle('runview', v === 'run');
     if (v === 'books') renderBooks(); if (v === 'log') renderLog(); if (v === 'stats') renderStats(); if (v === 'settings') renderCfg(); if (v === 'run') renderRun();
     window.scrollTo(0, 0);
   }
@@ -1012,6 +1022,7 @@ input[type=time]{font:inherit;font-size:16px;width:100%;color:var(--ink);backgro
   $('rwClose').addEventListener('click', () => { $('reward').hidden = true; });
   $('reward').addEventListener('click', e => { if (e.target === $('reward')) $('reward').hidden = true; });
 
+  document.body.classList.add('runview');
   resetManual(); resetBookForm(); renderAll(); loadImgs();
   if (run && run.mode === 'timer' && activeMs() >= run.target) finishRun(true); // 閉じている間にタイマーが終わっていた
   else if (run) keepAwake(wantAwake());
